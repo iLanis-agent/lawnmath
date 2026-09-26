@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LawnMath - honest lawn watering math</title>
+<style>
+  :root { --bg:#10160f; --card:#18211a; --ink:#ecf3e8; --dim:#9fb39a; --acc:#8ecf5a; --hot:#8fd98a; --cold:#d98a8a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding:28px 24px 8px; max-width:980px; margin:0 auto; display:flex; justify-content:space-between; align-items:baseline; }
+  h1 { margin:0; font-size:28px; }
+  h1 span { color:var(--acc); }
+  nav a { color:var(--dim); text-decoration:none; font-size:14px; }
+  main { max-width:980px; margin:0 auto; padding:16px 24px 60px; display:grid; gap:18px; }
+  .card { background:var(--card); border-radius:14px; padding:20px; }
+  .card h2 { margin:0 0 12px; font-size:13px; letter-spacing:1.5px; color:var(--dim); text-transform:uppercase; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; }
+  label { display:block; font-size:13px; color:var(--dim); margin-bottom:4px; }
+  input, select { width:100%; background:#111a12; border:1px solid #33482e; color:var(--ink); border-radius:8px; padding:9px 10px; font-size:15px; }
+  .hint { font-size:12.5px; color:var(--dim); margin-top:10px; }
+  button { cursor:pointer; border:0; border-radius:9px; padding:11px 16px; font-size:15px; background:var(--acc); color:#15220a; font-weight:600; }
+  button.ghost { background:#26331f; color:var(--ink); font-weight:500; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  .verdict { font-size:17px; line-height:1.65; }
+  .verdict b { color:var(--acc); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:16px; }
+  .stat { background:#111a12; border-radius:10px; padding:12px; }
+  .stat .v { font-size:19px; font-weight:700; color:var(--acc); }
+  .stat .k { font-size:12px; color:var(--dim); margin-top:2px; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12.5px; font-weight:600; margin-left:8px; }
+  .b-best { background:#1d3320; color:var(--hot); }
+  .b-ok { background:#2c3316; color:var(--acc); }
+  .b-waste, .b-fungus { background:#3a1d1d; color:var(--cold); }
+  .note { margin-top:14px; font-size:13.5px; color:var(--dim); }
+  .note b { color:var(--acc); font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Lawn<span>Math</span></h1>
+  <nav><a href="index.html">home</a></nav>
+</header>
+<main>
+  <section class="card">
+    <h2>The catch-can test (do this once)</h2>
+    <div class="grid">
+      <div><label>Depths in your cans, inches (comma-sep)</label><input id="cans" value="0.20, 0.30, 0.25, 0.22, 0.28"></div>
+      <div><label>Minutes the sprinklers ran</label><input id="canMin" type="number" value="15"></div>
+    </div>
+    <p class="hint">Set 5+ identical cans across one zone, run the sprinklers, measure each. The average is your precipitation rate; the spread tells you if your heads lie.</p>
+  </section>
+
+  <section class="card">
+    <h2>The lawn and the week</h2>
+    <div class="grid">
+      <div><label>Grass type</label><select id="grass">
+        <option value="cool">Cool-season (fescue, bluegrass)</option>
+        <option value="warm">Warm-season (bermuda, zoysia)</option>
+      </select></div>
+      <div><label>Rain this week (inches)</label><input id="rain" type="number" step="0.1" value="0.25"></div>
+      <div><label>Lawn size (sq ft)</label><input id="sqft" type="number" value="5000"></div>
+      <div><label>Soil</label><select id="soil">
+        <option value="0">sandy / loam - soaks it in</option>
+        <option value="12">clay - runoff after ~12 min</option>
+        <option value="8">heavy clay - runoff after ~8 min</option>
+      </select></div>
+      <div><label>Sprinkler start hour</label><select id="hour">
+        <option value="6">6 AM</option><option value="10">10 AM</option>
+        <option value="13">1 PM</option><option value="18">6 PM</option><option value="22">10 PM</option>
+      </select></div>
+      <div><label>Water price ($ per 1000 gal)</label><input id="price" type="number" step="0.5" value="5"></div>
+    </div>
+    <div class="row">
+      <button id="run">Build my watering plan</button>
+      <button class="ghost" data-preset="guess">the classic guesser</button>
+      <button class="ghost" data-preset="clay">clay soil, hot week</button>
+      <button class="ghost" data-preset="drought">drought week triage</button>
+    </div>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2>The plan</h2>
+    <p class="verdict" id="verdictText"></p>
+    <div class="stats" id="stats"></div>
+    <p class="note" id="advice"></p>
+  </section>
+
+  <section class="card">
+    <h2>Why fifteen minutes every day is the worst plan</h2>
+    <p class="note">Daily sprinkles wet the top inch and teach roots to stay shallow - then one hot week kills the lawn. <b>Deep and infrequent</b> is the whole game: soak to 6 inches, let the top dry, and roots chase the water down. Most lawns want about <b>an inch a week</b> (cool-season a bit more, warm-season less), rain included. Water at <b>dawn</b>: midday loses a third of the water to the sun before it lands, and overnight watering leaves blades wet until morning, which is an open invitation to fungus. And nobody's sprinklers deliver what the timer assumes - the catch-can test is the only honest number.</p>
+  </section>
+</main>
+<script src="engine.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  var PRESETS = {
+    guess: { cans: '0.10, 0.15, 0.12, 0.11, 0.14', canMin: 15, grass: 'cool', rain: 0.25, sqft: 5000, soil: '0', hour: '13', price: 5 },
+    clay: { cans: '0.25, 0.30, 0.28, 0.26, 0.31', canMin: 15, grass: 'cool', rain: 0, sqft: 6000, soil: '12', hour: '6', price: 5 },
+    drought: { cans: '0.20, 0.25, 0.22, 0.21, 0.24', canMin: 15, grass: 'warm', rain: 0, sqft: 4000, soil: '0', hour: '6', price: 8 }
+  };
+  document.querySelectorAll('[data-preset]').forEach(function (b) {
+    b.onclick = function () {
+      var p = PRESETS[b.dataset.preset];
+      Object.keys(p).forEach(function (k) { $(k).value = p[k]; });
+      run();
+    };
+  });
+
+  function parseCans() {
+    return $('cans').value.split(',').map(function (s) { return parseFloat(s); })
+      .filter(function (x) { return isFinite(x) && x >= 0; });
+  }
+
+  function run() {
+    var depths = parseCans();
+    var canMin = +$('canMin').value || 0;
+    if (!depths.length || !canMin) { alert('Enter can depths and minutes.'); return; }
+    var rate = LawnMath.precipitationRate(depths, canMin);
+    var uni = LawnMath.uniformity(depths);
+    var grass = $('grass').value;
+    var rain = +$('rain').value || 0;
+    var need = LawnMath.weeklyNeed(grass, rain);
+    var sess = LawnMath.sessions(need, 0.6);
+    var runoff = +$('soil').value;
+    var rt = sess.count ? LawnMath.runtime(sess.inchesEach, rate, runoff) : { minutes: 0, cycles: 1, cycleMinutes: 0 };
+    var hour = +$('hour').value;
+    var ev = LawnMath.evapVerdict(hour);
+    var evLoss = LawnMath.evapLoss(hour);
+    var sqft = +$('sqft').value || 0;
+    var price = +$('price').value || 0;
+    var weekCost = LawnMath.costPerWeek(sqft, need, price);
+    var weekGal = Math.round(LawnMath.gallons(sqft, need));
+
+    var text;
+    if (!sess.count) {
+      text = 'Rain already covered this week - <b>the honest plan is to water nothing</b>. Every sprinkler minute now is overwatering.';
+    } else {
+      text = 'Your heads deliver <b>' + (Math.round(rate * 100) / 100) + ' in/hr</b>' +
+        (uni < 0.7 ? ' - but unevenly (uniformity ' + uni + '), so the dry spots are a head problem, not a time problem. ' : '. ') +
+        'After ' + rain + '" of rain, the lawn needs <b>' + need + '" more</b>. That is <b>' + sess.count +
+        ' deep watering' + (sess.count > 1 ? 's' : '') + '</b> of about ' + sess.inchesEach + '" each - <b>' +
+        LawnMath.fmtMin(rt.minutes) + ' per session</b>' +
+        (rt.cycles > 1 ? ', split into ' + rt.cycles + ' cycles of ' + LawnMath.fmtMin(rt.cycleMinutes) + ' with an hour of soak between' : '') + '.';
+    }
+
+    $('verdictText').innerHTML = text + ' <span class="badge b-' + ev.code + '">' + ev.label + '</span>';
+
+    var stats = [
+      { v: (Math.round(rate * 100) / 100) + '"', k: 'precipitation rate per hour' },
+      { v: need + '"', k: 'still needed this week' },
+      { v: sess.count || '-', k: 'deep sessions, not daily sprinkles' },
+      { v: rt.minutes ? LawnMath.fmtMin(rt.minutes) : '-', k: rt.cycles > 1 ? rt.cycles + ' x ' + LawnMath.fmtMin(rt.cycleMinutes) + ', soak between' : 'runtime per session' },
+      { v: weekGal.toLocaleString('en-US') + ' gal', k: 'weekly water' },
+      { v: '$' + weekCost, k: 'on the bill, per week' }
+    ];
+    $('stats').innerHTML = stats.map(function (x) {
+      return '<div class="stat"><div class="v">' + x.v + '</div><div class="k">' + x.k + '</div></div>';
+    }).join('');
+
+    var advice;
+    if (uni < 0.7) {
+      advice = 'Fix the heads before the schedule: uniformity of ' + uni + ' means some cans got nearly dry while others flooded. Clean nozzles, straighten tilted heads, match the rotor types.';
+    } else if (!sess.count) {
+      advice = 'A free rain gauge (or a tuna can) on the lawn settles this every week. Watering by calendar instead of weather is how money evaporates.';
+    } else if (evLoss >= 0.3) {
+      advice = 'Move the start to before 9 AM: at your current hour about <b>' + Math.round(evLoss * 100) + '%</b> of every dollar of water boils off before it lands.';
+    } else if (rt.cycles > 1) {
+      advice = 'Cycle-and-soak looks fussy but it is the only way clay accepts water - running straight through just rents the water to the street.';
+    } else {
+      advice = 'Deep-infrequent only works if you let the top dry between sessions. If footprints stay printed on the lawn at noon, water the next morning - that is the lawn asking.';
+    }
+    $('advice').innerHTML = advice;
+
+    $('result').hidden = false;
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('run').onclick = run;
+})();
+</script>
+</body>
+</html>
